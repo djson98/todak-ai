@@ -112,6 +112,7 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
     { label: '슬픔', icon: 'rainy', color: '#93c5fd' },
     { label: '화남', icon: 'flame', color: '#fca5a5' },
     { label: '불안', icon: 'alert-circle', color: '#fdba74' },
+    { label: '지침', icon: 'moon', color: '#94a3b8' },
   ];
 
   const handleDayPress = async (day: DateData) => {

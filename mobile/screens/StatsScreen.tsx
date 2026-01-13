@@ -1,39 +1,102 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-type Emotion = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-};
+import { getAllJournals } from '../services/journalService';
+import { JournalEntry } from '../types/journal';
 
 type StatsScreenProps = {
   onBack: () => void;
-  entries?: any[]; // 나중에 실제 데이터 타입으로 변경
 };
 
-// 감정 설정
-const EMOTIONS: Emotion[] = [
+// 감정 설정 (HomeScreen과 동일하게)
+const EMOTIONS = [
   { label: '기쁨', icon: 'sunny', color: '#fcd34d' },
   { label: '평온', icon: 'leaf', color: '#a5b4fc' },
   { label: '슬픔', icon: 'rainy', color: '#93c5fd' },
   { label: '화남', icon: 'flame', color: '#fca5a5' },
   { label: '불안', icon: 'alert-circle', color: '#fdba74' },
+  { label: '지침', icon: 'moon', color: '#94a3b8' },
 ];
 
-export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) {
+export default function StatsScreen({ onBack }: StatsScreenProps) {
+  const [journals, setJournals] = useState<JournalEntry[]>([]);
+
+  // 일기 데이터 로드
+  useEffect(() => {
+    loadJournals();
+  }, []);
+
+  const loadJournals = async () => {
+    try {
+      const allJournals = await getAllJournals();
+      setJournals(allJournals);
+    } catch (error) {
+      console.error('일기 불러오기 실패:', error);
+    }
+  };
+
+  // 최근 1달간의 일기만 필터링
+  const recentMonthJournals = useMemo(() => {
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+
+    return journals.filter(journal => {
+      const journalDate = new Date(journal.date + 'T00:00:00');
+      return journalDate >= oneMonthAgo && journalDate <= today;
+    });
+  }, [journals]);
+
   // 감정별 카운트 계산
   const emotionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     EMOTIONS.forEach(emotion => {
       counts[emotion.label] = 0;
     });
-    // entries가 있으면 카운트 (나중에 실제 데이터 연동)
+
+    // 최근 1달간의 일기에서 감정별 카운트
+    recentMonthJournals.forEach(journal => {
+      const emotionLabel = journal.emotion.label;
+      if (counts.hasOwnProperty(emotionLabel)) {
+        counts[emotionLabel]++;
+      }
+    });
+
     return counts;
-  }, [entries]);
+  }, [recentMonthJournals]);
 
   const totalCount = Object.values(emotionCounts).reduce((sum, count) => sum + count, 0);
+
+  // 감정 라벨을 형용사 형태로 변환
+  const getEmotionAdjective = (label: string): string => {
+    const adjectiveMap: Record<string, string> = {
+      '기쁨': '기쁜',
+      '평온': '평온한',
+      '슬픔': '슬픈',
+      '화남': '화난',
+      '불안': '불안한',
+      '지침': '지친',
+    };
+    return adjectiveMap[label] || label;
+  };
+
+  // 가장 많은 감정 찾기
+  const mostFrequentEmotion = useMemo(() => {
+    if (totalCount === 0) return null;
+    
+    let maxCount = 0;
+    let maxEmotion = EMOTIONS[0];
+    
+    EMOTIONS.forEach(emotion => {
+      const count = emotionCounts[emotion.label] || 0;
+      if (count > maxCount) {
+        maxCount = count;
+        maxEmotion = emotion;
+      }
+    });
+    
+    return maxEmotion;
+  }, [emotionCounts, totalCount]);
 
   return (
     <View style={styles.container}>
@@ -57,33 +120,38 @@ export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) 
         {/* 인사 카드 */}
         <View style={styles.greetingCard}>
           <View style={styles.iconContainer}>
-            <Ionicons name="heart" size={24} color="#6366f1" />
+            {mostFrequentEmotion ? (
+              <Ionicons 
+                name={mostFrequentEmotion.icon as any} 
+                size={24} 
+                color={mostFrequentEmotion.color} 
+              />
+            ) : (
+              <Ionicons name="heart" size={24} color="#6366f1" />
+            )}
           </View>
           <Text style={styles.greetingTitle}>
-            {totalCount > 0 ? '마음을 잘 돌보고 계시네요.' : '첫 기록을 시작해보세요.'}
+            {mostFrequentEmotion 
+              ? `최근 한 달, ${getEmotionAdjective(mostFrequentEmotion.label)} 날이 가장 많았어요.`
+              : '첫 기록을 시작해보세요.'}
           </Text>
-          <Text style={styles.greetingSubtitle}>
-            꾸준한 기록은 마음 근육을 키워줍니다.
-          </Text>
+          {mostFrequentEmotion && (
+            <Text style={styles.aiQuestion}>
+              {getEmotionAdjective(mostFrequentEmotion.label)} 날이 많았던 이유는 뭐 때문이에요. (에이전트2의 응답을 여기서 받는거입니다 이부분추후업데이트)
+            </Text>
+          )}
         </View>
 
         {/* 감정 분포 */}
         <View style={styles.chartCard}>
-          <Text style={styles.sectionTitle}>감정 분포</Text>
+          <Text style={styles.sectionTitle}>감정 분포 (최근 1개월)</Text>
           
           {totalCount === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>아직 기록이 없습니다.</Text>
             </View>
           ) : (
-            <>
-              {/* 중앙 숫자 표시 */}
-              <View style={styles.centerCircle}>
-                <Text style={styles.totalCount}>{totalCount}</Text>
-                <Text style={styles.totalLabel}>기록수</Text>
-              </View>
-
-              <View>
+            <View>
                 {EMOTIONS.map((emotion) => {
                   const count = emotionCounts[emotion.label] || 0;
                   const percentage = totalCount > 0 ? (count / totalCount) * 100 : 0;
@@ -91,7 +159,7 @@ export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) 
                   return (
                     <View key={emotion.label} style={styles.emotionItem}>
                       <View style={styles.emotionInfo}>
-                        <Ionicons name={emotion.icon} size={20} color={emotion.color} style={{ marginRight: 8 }} />
+                        <Ionicons name={emotion.icon as any} size={20} color={emotion.color} style={{ marginRight: 8 }} />
                         <Text style={styles.emotionLabel}>{emotion.label}</Text>
                       </View>
                       <View style={styles.barContainer}>
@@ -110,7 +178,6 @@ export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) 
                   );
                 })}
               </View>
-            </>
           )}
         </View>
       </ScrollView>
@@ -205,6 +272,15 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 4,
     textAlign: 'center',
+    fontFamily: 'NanumPen',
+  },
+  aiQuestion: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 12,
+    fontFamily: 'NanumPen',
+    lineHeight: 20,
   },
   greetingSubtitle: {
     fontSize: 12,
@@ -225,31 +301,14 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '700',
     color: '#cbd5e1',
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginBottom: 24,
     paddingHorizontal: 8,
-  },
-  centerCircle: {
-    height: 192,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  totalCount: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#1e293b',
-  },
-  totalLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    textTransform: 'uppercase',
-    marginTop: 4,
+    fontFamily: 'NanumPen',
   },
   emptyState: {
     height: 192,
@@ -259,6 +318,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: '#94a3b8',
+    fontFamily: 'NanumPen',
   },
   emotionItem: {
     flexDirection: 'row',
@@ -271,9 +331,10 @@ const styles = StyleSheet.create({
     width: 80,
   },
   emotionLabel: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '500',
     color: '#334155',
+    fontFamily: 'NanumPen',
   },
   barContainer: {
     flex: 1,
@@ -288,10 +349,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   countText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#475569',
-    width: 32,
+    width: 40,
     textAlign: 'right',
+    fontFamily: 'NanumPen',
   },
 });
