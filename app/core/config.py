@@ -12,8 +12,11 @@ class Settings:
     # Upstage API 키 (AI 모델 사용을 위해 필요)
     UPSTAGE_API_KEY: str = os.getenv("UPSTAGE_API_KEY", "")
     
-    # 데이터베이스 URL (SQLite 사용, 나중에 PostgreSQL로 변경 가능)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./todak.db")
+    # Firebase 설정
+    # Firebase 서비스 계정 키 파일 경로 (JSON 파일)
+    FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+    # 또는 Firebase 서비스 계정 JSON 문자열 (환경 변수로 직접 넣을 경우)
+    FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
     
     # 서버 설정
     HOST: str = os.getenv("HOST", "0.0.0.0")  # 모든 네트워크 인터페이스에서 접근 허용

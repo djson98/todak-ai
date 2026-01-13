@@ -80,9 +80,23 @@ export default function JournalWriteScreen({ emotion, selectedDate, existingJour
         onSave();
       }
       onBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('일기 저장 실패:', error);
-      Alert.alert('오류', '일기 저장에 실패했습니다.');
+      
+      // 에러 메시지 추출
+      const errorMessage = error?.message || '일기 저장에 실패했습니다.';
+      
+      // Firebase 미설정 에러인 경우 명확한 메시지 표시
+      if (errorMessage.includes('데이터베이스가 설정되지 않았습니다') || 
+          errorMessage.includes('Firebase')) {
+        Alert.alert(
+          '데이터베이스 미설정',
+          'Firebase가 설정되지 않아 일기를 저장할 수 없습니다.\n\nFirebase 설정 후 다시 시도해주세요.',
+          [{ text: '확인' }]
+        );
+      } else {
+        Alert.alert('오류', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

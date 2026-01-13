@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import diary
+from app.core.firebase import initialize_firebase
 
 # FastAPI 앱 생성 (서버의 심장)
 app = FastAPI(
@@ -18,6 +19,13 @@ app.add_middleware(
     allow_methods=["*"],  # 모든 HTTP 메서드 허용 (GET, POST, PUT, DELETE 등)
     allow_headers=["*"],  # 모든 헤더 허용
 )
+
+# Firebase 초기화 (서버 시작 시 한 번만 실행)
+try:
+    initialize_firebase()
+except Exception as e:
+    print(f"⚠️  Firebase 초기화 경고: {e}")
+    print("⚠️  Firebase 없이도 서버는 실행되지만 데이터베이스 기능이 동작하지 않습니다.")
 
 # API 라우터 등록
 app.include_router(diary.router)
