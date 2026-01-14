@@ -15,6 +15,10 @@ class Settings:
     # 데이터베이스 URL (SQLite 사용, 나중에 PostgreSQL로 변경 가능)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./todak.db")
     
+    # Firebase 설정
+    FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+    FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
+    
     # 서버 설정
     HOST: str = os.getenv("HOST", "0.0.0.0")  # 모든 네트워크 인터페이스에서 접근 허용
     PORT: int = int(os.getenv("PORT", "8000"))  # 기본 포트 8000

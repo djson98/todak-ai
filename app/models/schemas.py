@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 from enum import Enum
 
@@ -31,7 +31,7 @@ class DiaryEntryCreate(DiaryEntryBase):
 
 class DiaryEntry(DiaryEntryBase):
     """일기 응답 모델 (저장 후 반환할 때)"""
-    id: Optional[int] = None
+    id: Optional[Union[int, str]] = None  # Firestore는 문자열 ID를 사용하므로 Union 타입
     created_at: Optional[datetime] = None
     
     class Config:

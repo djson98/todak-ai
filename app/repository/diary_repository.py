@@ -100,8 +100,19 @@ _diary_repository = None
 
 
 def get_diary_repository():
-    """일기 저장소 인스턴스 가져오기"""
+    """
+    일기 저장소 인스턴스 가져오기 (Lazy initialization)
+    
+    Firebase가 설정되지 않은 경우에도 서버가 시작되도록 
+    lazy initialization을 사용합니다.
+    """
     global _diary_repository
     if _diary_repository is None:
-        _diary_repository = DiaryRepository()
+        try:
+            _diary_repository = DiaryRepository()
+        except ValueError:
+            # Firebase 미설정 시 ValueError 발생
+            # 이 경우 None을 반환하지 않고 예외를 그대로 전파
+            # 호출하는 쪽에서 처리하도록 함
+            raise
     return _diary_repository
