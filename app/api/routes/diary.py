@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from datetime import datetime
-from app.models.schemas import DiaryEntry, DiaryEntryCreate
+from app.models.schemas import DiaryEntry, DiaryEntryCreate, DiaryEntryUpdate
 from app.repository.diary_repository import get_diary_repository
 
 # 라우터 생성 (prefix: /api/diary)
@@ -73,9 +73,9 @@ def get_diary(diary_id: str):
     try:
         repository = get_diary_repository()
         diary = repository.get_by_id(diary_id)
-    if not diary:
-        raise HTTPException(status_code=404, detail="Diary not found")
-    return diary
+        if not diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        return diary
     except ValueError as e:
         error_msg = str(e)
         if "Firebase" in error_msg or "Firestore" in error_msg:
@@ -86,6 +86,35 @@ def get_diary(diary_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"일기 조회 실패: {str(e)}")
+
+
+@router.put("/{diary_id}", response_model=DiaryEntry)
+def update_diary(diary_id: str, updates: DiaryEntryUpdate):
+    """
+    일기 수정 API
+    
+    특정 일기의 내용과 감정을 수정합니다.
+    
+    - **diary_id**: 수정할 일기 ID (문자열)
+    - **content**: 수정할 일기 내용 (선택사항)
+    - **emotion**: 수정할 감정 타입 (선택사항)
+    """
+    try:
+        repository = get_diary_repository()
+        updated_diary = repository.update(diary_id, updates)
+        if not updated_diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        return updated_diary
+    except ValueError as e:
+        error_msg = str(e)
+        if "Firebase" in error_msg or "Firestore" in error_msg:
+            print(f"⚠️  Firebase 미설정: {error_msg}")
+            raise HTTPException(status_code=503, detail="데이터베이스가 설정되지 않았습니다.")
+        raise HTTPException(status_code=500, detail=f"일기 수정 실패: {error_msg}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"일기 수정 실패: {str(e)}")
 
 
 @router.delete("/{diary_id}", status_code=204)
@@ -101,8 +130,8 @@ def delete_diary(diary_id: str):
         repository = get_diary_repository()
         success = repository.delete(diary_id)
         if not success:
-        raise HTTPException(status_code=404, detail="Diary not found")
-    return None
+            raise HTTPException(status_code=404, detail="Diary not found")
+        return None
     except ValueError as e:
         error_msg = str(e)
         if "Firebase" in error_msg or "Firestore" in error_msg:

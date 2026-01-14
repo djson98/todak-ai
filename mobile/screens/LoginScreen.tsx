@@ -14,10 +14,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           <View style={styles.logoCircle}>
             <Ionicons name="heart" size={48} color="#fb7185" />
           </View>
-          <Text style={styles.title}>마음 일기</Text>
-          <Text style={styles.subtitle}>오늘 당신의 마음을 토닥여줄게요.</Text>
-        </View>
-
+          <Text style={styles.title}>EmoLog</Text>
+          <Text style={styles.subtitle}>오늘 당신의 마음을 토닥여줄게요.Text>
+        </View></
         {/* 로그인 버튼 영역 */}
         <View style={styles.buttonSection}>
           <TouchableOpacity 

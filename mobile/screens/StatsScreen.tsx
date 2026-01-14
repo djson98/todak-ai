@@ -1,6 +1,9 @@
-import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { getStats, getReport } from '../services/api';
+import { getUserId } from '../services/userService';
+import { useState, useEffect } from 'react';
 
 type Emotion = {
   label: string;
@@ -10,7 +13,6 @@ type Emotion = {
 
 type StatsScreenProps = {
   onBack: () => void;
-  entries?: any[]; // 나중에 실제 데이터 타입으로 변경
 };
 
 // 감정 설정
@@ -20,32 +22,89 @@ const EMOTIONS: Emotion[] = [
   { label: '슬픔', icon: 'rainy', color: '#93c5fd' },
   { label: '화남', icon: 'flame', color: '#fca5a5' },
   { label: '불안', icon: 'alert-circle', color: '#fdba74' },
+  { label: '지침', icon: 'moon', color: '#a78bfa' },
 ];
 
-export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) {
-  // 감정별 카운트 계산
-  const emotionCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    EMOTIONS.forEach(emotion => {
-      counts[emotion.label] = 0;
-    });
-    // entries가 있으면 카운트 (나중에 실제 데이터 연동)
-    return counts;
-  }, [entries]);
+export default function StatsScreen({ onBack }: StatsScreenProps) {
+  const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
+  const [stats, setStats] = useState<{
+    emotion_stats: Array<{ emotion: string; count: number }>;
+    topic_stats: Array<{ topic: string; count: number }>;
+    total_count: number;
+  } | null>(null);
+  const [report, setReport] = useState<{ title: string; content: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const totalCount = Object.values(emotionCounts).reduce((sum, count) => sum + count, 0);
+  useEffect(() => {
+    loadStats();
+  }, [reportPeriod]);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+      const userId = getUserId();
+      const [statsData, reportData] = await Promise.all([
+        getStats(userId, reportPeriod),
+        getReport(userId, reportPeriod),
+      ]);
+      
+      // 백엔드 감정을 프론트엔드 형식으로 변환
+      const emotionMap: Record<string, string> = {
+        'JOY': '기쁨',
+        'CALM': '평온',
+        'SADNESS': '슬픔',
+        'ANGER': '화남',
+        'ANXIETY': '불안',
+        'EXHAUSTED': '지침',
+      };
+      
+      const convertedEmotionStats = statsData.emotion_stats.map(stat => ({
+        emotion: emotionMap[stat.emotion] || stat.emotion,
+        count: stat.count,
+      }));
+      
+      setStats({
+        emotion_stats: convertedEmotionStats,
+        topic_stats: statsData.topic_stats,
+        total_count: statsData.total_count,
+      });
+      setReport({
+        title: reportData.title,
+        content: reportData.content,
+      });
+    } catch (error) {
+      console.error('통계 로드 실패:', error);
+      setStats({
+        emotion_stats: [],
+        topic_stats: [],
+        total_count: 0,
+      });
+      setReport({
+        title: reportPeriod === 'week' ? '지난 주의 감정 레포트' : '지난 달의 감정 레포트',
+        content: '통계를 불러오는데 실패했습니다.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalCount = stats?.total_count || 0;
+  const topicData = stats?.topic_stats.filter(item => item.count > 0) || [];
+  const emotionData = stats?.emotion_stats.filter(item => item.count > 0) || [];
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={['#EFF6FF', '#F3E8FF', '#FCE7F3']}
+        style={StyleSheet.absoluteFill}
+      />
+      
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>마음 분석</Text>
-          <Text style={styles.headerSubtitle}>오늘 당신의 마음을 토닥여줄게요.</Text>
-        </View>
-        <View style={styles.headerRight}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color="#1e293b" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>통계 및 리포트</Text>
         </View>
       </View>
 
@@ -54,115 +113,145 @@ export default function StatsScreen({ onBack, entries = [] }: StatsScreenProps) 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 인사 카드 */}
-        <View style={styles.greetingCard}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="heart" size={24} color="#6366f1" />
-          </View>
-          <Text style={styles.greetingTitle}>
-            {totalCount > 0 ? '마음을 잘 돌보고 계시네요.' : '첫 기록을 시작해보세요.'}
-          </Text>
-          <Text style={styles.greetingSubtitle}>
-            꾸준한 기록은 마음 근육을 키워줍니다.
-          </Text>
-        </View>
-
-        {/* 감정 분포 */}
-        <View style={styles.chartCard}>
-          <Text style={styles.sectionTitle}>감정 분포</Text>
-          
-          {totalCount === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>아직 기록이 없습니다.</Text>
+        {totalCount === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconContainer}>
+              <Text style={styles.emptyIcon}>📊</Text>
             </View>
-          ) : (
-            <>
-              {/* 중앙 숫자 표시 */}
-              <View style={styles.centerCircle}>
-                <Text style={styles.totalCount}>{totalCount}</Text>
-                <Text style={styles.totalLabel}>기록수</Text>
+            <Text style={styles.emptyTitle}>아직 데이터가 없어요</Text>
+            <Text style={styles.emptySubtitle}>
+              감정 메모를 작성하면{'\n'}
+              통계와 레포트를 확인할 수 있습니다
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* 주제별 통계 */}
+            {topicData.length > 0 && (
+              <View style={styles.statCard}>
+                <Text style={styles.statTitle}>주제별 통계</Text>
+                <View style={styles.statContent}>
+                  {topicData.map((item) => (
+                    <View key={item.topic} style={styles.statItem}>
+                      <View style={styles.statItemLeft}>
+                        <View style={[styles.statDot, { backgroundColor: getTopicColor(item.topic) }]} />
+                        <Text style={styles.statLabel}>{item.topic}</Text>
+                      </View>
+                      <Text style={styles.statValue}>{item.count}회</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* 감정별 통계 */}
+            {emotionData.length > 0 && (
+              <View style={styles.statCard}>
+                <Text style={styles.statTitle}>감정별 통계</Text>
+                <View style={styles.statContent}>
+                  {emotionData.map((item) => {
+                    const percentage = totalCount > 0 ? (item.count / totalCount) * 100 : 0;
+                    const emotionInfo = EMOTIONS.find(e => e.label === item.emotion);
+                    return (
+                      <View key={item.emotion} style={styles.emotionStatItem}>
+                        <View style={styles.emotionStatInfo}>
+                          <Ionicons name={emotionInfo?.icon || 'ellipse'} size={20} color={emotionInfo?.color || '#94a3b8'} />
+                          <Text style={styles.emotionStatLabel}>{item.emotion}</Text>
+                        </View>
+                        <View style={styles.barContainer}>
+                          <View 
+                            style={[
+                              styles.bar, 
+                              { 
+                                width: `${percentage}%`, 
+                                backgroundColor: emotionInfo?.color || '#94a3b8'
+                              }
+                            ]} 
+                          />
+                        </View>
+                        <Text style={styles.emotionStatCount}>{item.count}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* 레포트 섹션 */}
+            <View style={styles.reportCard}>
+              <View style={styles.reportHeader}>
+                <Text style={styles.reportTitle}>감정 레포트</Text>
+                <View style={styles.periodSelector}>
+                  <TouchableOpacity
+                    style={[styles.periodButton, reportPeriod === 'week' && styles.periodButtonActive]}
+                    onPress={() => setReportPeriod('week')}
+                  >
+                    <Text style={[styles.periodButtonText, reportPeriod === 'week' && styles.periodButtonTextActive]}>
+                      1주일
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.periodButton, reportPeriod === 'month' && styles.periodButtonActive]}
+                    onPress={() => setReportPeriod('month')}
+                  >
+                    <Text style={[styles.periodButtonText, reportPeriod === 'month' && styles.periodButtonTextActive]}>
+                      1개월
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View>
-                {EMOTIONS.map((emotion) => {
-                  const count = emotionCounts[emotion.label] || 0;
-                  const percentage = totalCount > 0 ? (count / totalCount) * 100 : 0;
-                  
-                  return (
-                    <View key={emotion.label} style={styles.emotionItem}>
-                      <View style={styles.emotionInfo}>
-                        <Ionicons name={emotion.icon} size={20} color={emotion.color} style={{ marginRight: 8 }} />
-                        <Text style={styles.emotionLabel}>{emotion.label}</Text>
-                      </View>
-                      <View style={styles.barContainer}>
-                        <View 
-                          style={[
-                            styles.bar, 
-                            { 
-                              width: `${percentage}%`, 
-                              backgroundColor: emotion.color 
-                            }
-                          ]} 
-                        />
-                      </View>
-                      <Text style={styles.countText}>{count}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </>
-          )}
-        </View>
+              <LinearGradient
+                colors={['#F3E8FF', '#FCE7F3']}
+                style={styles.reportContent}
+              >
+                <View style={styles.reportContentHeader}>
+                  <Ionicons name="calendar" size={20} color="#8B5CF6" />
+                  <Text style={styles.reportContentTitle}>{report?.title || ''}</Text>
+                </View>
+                <Text style={styles.reportContentText}>{report?.content || ''}</Text>
+              </LinearGradient>
+
+              <Text style={styles.reportHint}>
+                💡 레포트는 AI가 당신의 감정 패턴을 분석하여 생성됩니다
+              </Text>
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
 }
 
+const getTopicColor = (topic: string) => {
+  const colors: Record<string, string> = {
+    '학업': '#3B82F6',
+    '대인관계': '#10B981',
+    '일상': '#8B5CF6',
+  };
+  return colors[topic] || '#94a3b8';
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fdfbf7',
   },
   header: {
     paddingTop: 48,
     paddingBottom: 16,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   headerLeft: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
-    letterSpacing: -0.5,
-    fontFamily: 'NanumPen',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500',
-    marginTop: 2,
-    fontFamily: 'NanumPen',
-  },
-  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  heartIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1e293b',
+    fontFamily: 'NanumPen',
   },
   backButton: {
     width: 40,
@@ -175,123 +264,198 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 96,
   },
-  greetingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 40,
-    padding: 32,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  emptyState: {
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#eef2ff',
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  greetingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  emptyIcon: {
+    fontSize: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 4,
-    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'NanumPen',
   },
-  greetingSubtitle: {
-    fontSize: 12,
+  emptySubtitle: {
+    fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 16,
+    lineHeight: 20,
+    fontFamily: 'NanumPen',
   },
-  chartCard: {
+  statCard: {
     backgroundColor: '#fff',
-    borderRadius: 40,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
-  sectionTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  centerCircle: {
-    height: 192,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  totalCount: {
-    fontSize: 48,
-    fontWeight: '900',
+  statTitle: {
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1e293b',
-  },
-  totalLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    textTransform: 'uppercase',
-    marginTop: 4,
-  },
-  emptyState: {
-    height: 192,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#94a3b8',
-  },
-  emotionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 16,
+    fontFamily: 'NanumPen',
   },
-  emotionInfo: {
+  statContent: {
+    gap: 12,
+  },
+  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 80,
+    justifyContent: 'space-between',
   },
-  emotionLabel: {
+  statItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  statLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: '#334155',
+    fontFamily: 'NanumPen',
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+    fontFamily: 'NanumPen',
+  },
+  emotionStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  emotionStatInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 80,
+    gap: 8,
+  },
+  emotionStatLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#334155',
+    fontFamily: 'NanumPen',
   },
   barContainer: {
     flex: 1,
     height: 8,
     backgroundColor: '#f1f5f9',
     borderRadius: 4,
-    marginHorizontal: 12,
     overflow: 'hidden',
   },
   bar: {
     height: '100%',
     borderRadius: 4,
   },
-  countText: {
+  emotionStatCount: {
     fontSize: 14,
     fontWeight: '600',
     color: '#475569',
     width: 32,
     textAlign: 'right',
+    fontFamily: 'NanumPen',
+  },
+  reportCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  reportTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    fontFamily: 'NanumPen',
+  },
+  periodSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  periodButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+  },
+  periodButtonActive: {
+    backgroundColor: '#8B5CF6',
+  },
+  periodButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    fontFamily: 'NanumPen',
+  },
+  periodButtonTextActive: {
+    color: '#fff',
+  },
+  reportContent: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+  },
+  reportContentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  reportContentTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    fontFamily: 'NanumPen',
+  },
+  reportContentText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+    fontFamily: 'NanumPen',
+  },
+  reportHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    fontFamily: 'NanumPen',
   },
 });

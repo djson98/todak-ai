@@ -1,50 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, AppState, Alert } from 'react-native';
-import { Calendar, DateData } from 'react-native-calendars';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { getAllJournals, getJournalByDate, deleteJournal } from '../services/journalService';
 import { JournalEntry, Emotion } from '../types/journal';
 
-// 커스텀 날짜 컴포넌트
-const CustomDay = ({ date, state, marking, onPress }: any) => {
-  const journal = marking?.emotion;
-  
-  return (
-    <TouchableOpacity
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: 40,
-        minWidth: 40,
-      }}
-      onPress={() => onPress && onPress({ dateString: date.dateString } as DateData)}
-    >
-      {journal ? (
-        // 일기가 있으면 아이콘만 크게 표시
-        <Ionicons 
-          name={journal.icon as any} 
-          size={32} 
-          color={journal.color} 
-        />
-      ) : (
-        // 일기가 없으면 날짜 숫자 표시
-        <Text style={{
-          fontSize: 18,
-          fontFamily: 'NanumPen',
-          color: state === 'disabled' ? '#cbd5e1' : state === 'today' ? '#b8956a' : '#1e293b',
-          fontWeight: (state === 'today' ? '700' : 'normal') as '700' | 'normal',
-        }}>
-          {date.day}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-};
-
 type HomeScreenProps = {
-  onNavigateToSettings: () => void;
+  onNavigateToSettings?: () => void;
   onNavigateToStats: () => void;
   onNavigateToJournalWrite: (emotion: Emotion, selectedDate?: string, existingJournal?: JournalEntry | null) => void;
 };
@@ -54,8 +17,8 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(null);
   const [journals, setJournals] = useState<JournalEntry[]>([]);
-  const [markedDates, setMarkedDates] = useState<Record<string, any>>({});
-  const [listViewMode, setListViewMode] = useState(false);
+  const [isLogView, setIsLogView] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   const appState = useRef(AppState.currentState);
 
@@ -85,22 +48,6 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
     try {
       const allJournals = await getAllJournals();
       setJournals(allJournals);
-      
-      // 달력에 표시할 markedDates 생성 (아이콘 정보 포함)
-      const marked: Record<string, any> = {};
-      allJournals.forEach(journal => {
-        marked[journal.date] = {
-          marked: true,
-          dotColor: journal.emotion.color,
-          customStyles: {
-            container: {
-              position: 'relative',
-            },
-          },
-          emotion: journal.emotion, // 감정 정보 저장
-        };
-      });
-      setMarkedDates(marked);
     } catch (error) {
       console.error('일기 불러오기 실패:', error);
     }
@@ -115,19 +62,14 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
     { label: '지침', icon: 'moon', color: '#a78bfa' },
   ];
 
-  const handleDayPress = async (day: DateData) => {
-    const dateString = day.dateString;
-    setSelectedDate(dateString);
-    
-    // 해당 날짜의 일기 확인
-    const journal = await getJournalByDate(dateString);
+  const handleDayPress = async (day: string) => {
+    setSelectedDate(day);
+    const journal = await getJournalByDate(day);
     
     if (journal) {
-      // 일기가 있으면 감정 표시
       setSelectedJournal(journal);
       setModalVisible(true);
     } else {
-      // 일기가 없으면 감정 선택 모달
       setSelectedJournal(null);
       setModalVisible(true);
     }
@@ -135,7 +77,6 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
 
   const handleEmotionPress = (emotion: Emotion) => {
     setModalVisible(false);
-    // Modal이 완전히 닫힌 후 네비게이션 실행
     requestAnimationFrame(() => {
       onNavigateToJournalWrite(emotion, selectedDate || undefined, selectedJournal);
     });
@@ -143,29 +84,19 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
 
   // 일기 삭제
   const handleDeleteJournal = async (journal: JournalEntry) => {
-    Alert.alert(
-      '일기 삭제',
-      '정말 이 일기를 삭제하시겠어요?',
-      [
-        {
-          text: '취소',
-          style: 'cancel',
-        },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteJournal(journal.id);
-              loadJournals();
-            } catch (error) {
-              console.error('일기 삭제 실패:', error);
-              Alert.alert('오류', '일기 삭제에 실패했습니다.');
-            }
-          },
-        },
-      ]
-    );
+    if (showDeleteConfirm === journal.id) {
+      try {
+        await deleteJournal(journal.id);
+        loadJournals();
+        setShowDeleteConfirm(null);
+      } catch (error) {
+        console.error('일기 삭제 실패:', error);
+        Alert.alert('오류', '일기 삭제에 실패했습니다.');
+      }
+    } else {
+      setShowDeleteConfirm(journal.id);
+      setTimeout(() => setShowDeleteConfirm(null), 3000);
+    }
   };
 
   // 날짜 포맷팅
@@ -174,130 +105,222 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString + 'T00:00:00');
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return '방금 전';
+    if (minutes < 60) return `${minutes}분 전`;
+    if (hours < 24) return `${hours}시간 전`;
+    if (days < 7) return `${days}일 전`;
+
+    return formatDate(dateString);
+  };
+
   // 일기 목록 정렬 (최신순)
   const sortedJournals = [...journals].sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
+  // Log 데이터 추출 (간단한 키워드 기반)
+  const getLogData = (journal: JournalEntry) => {
+    const content = journal.content.toLowerCase();
+    let topic = 'none';
+    let emotion = journal.emotion.label;
+
+    if (content.includes('시험') || content.includes('공부')) {
+      topic = '학업';
+    } else if (content.includes('친구') || content.includes('사람')) {
+      topic = '대인관계';
+    } else if (content.includes('피곤') || content.includes('졸리')) {
+      topic = '일상';
+    } else if (content.length > 10) {
+      topic = '일상';
+    }
+
+    return { topic, emotion };
+  };
+
+  const getEmotionColor = (emotion: string) => {
+    const colors: Record<string, string> = {
+      '기쁨': '#fcd34d',
+      '평온': '#a5b4fc',
+      '슬픔': '#93c5fd',
+      '화남': '#fca5a5',
+      '불안': '#fdba74',
+      '지침': '#a78bfa',
+    };
+    return colors[emotion] || '#94a3b8';
+  };
+
+  const getTopicColor = (topic: string) => {
+    const colors: Record<string, string> = {
+      '학업': '#3B82F6',
+      '대인관계': '#10B981',
+      '일상': '#8B5CF6',
+      'none': '#94a3b8',
+    };
+    return colors[topic] || '#94a3b8';
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>마음 일기</Text>
-          <Text style={styles.headerSubtitle}>오늘 당신의 마음을 토닥여줄게요.</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            onPress={() => setListViewMode(!listViewMode)} 
-            style={styles.listButton}
-          >
-            <Ionicons 
-              name={listViewMode ? "calendar-outline" : "document-text-outline"} 
-              size={24} 
-              color="#b8956a" 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onNavigateToStats} style={styles.statsButton}>
-            <Ionicons name="stats-chart" size={24} color="#b8956a" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onNavigateToSettings} style={[styles.settingsButton, { marginLeft: 8 }]}>
-            <Ionicons name="settings" size={24} color="#b8956a" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <LinearGradient
+        colors={['#EFF6FF', '#F3E8FF', '#FCE7F3']}
+        style={StyleSheet.absoluteFill}
+      />
       
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {listViewMode ? (
-          // 목록 보기 모드
-          <View style={styles.listContainer}>
-            {sortedJournals.length === 0 ? (
-              <View style={styles.emptyListContainer}>
-                <Text style={styles.emptyListText}>
-                  아직 작성한 일기가 없어요.{'\n'}첫 일기를 작성해보세요!
-                </Text>
-              </View>
-            ) : (
-              sortedJournals.map((journal) => (
-                <View key={journal.id} style={styles.journalListItem}>
-                  <View style={styles.journalListItemHeader}>
-                    <View style={styles.journalListItemLeft}>
-                      <Ionicons 
-                        name={journal.emotion.icon as any} 
-                        size={24} 
-                        color={journal.emotion.color} 
-                      />
-                      <View style={styles.journalListItemInfo}>
-                        <Text style={styles.journalListItemDate}>{formatDate(journal.date)}</Text>
-                        <Text style={styles.journalListItemEmotion}>{journal.emotion.label}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.journalListItemContent} numberOfLines={3}>
-                    {journal.content || '내용이 없습니다.'}
-                  </Text>
-                  <View style={styles.journalListItemActions}>
-                    <TouchableOpacity
-                      style={styles.editListItemButton}
-                      onPress={() => {
-                        setSelectedDate(journal.date);
-                        setSelectedJournal(journal);
-                        onNavigateToJournalWrite(journal.emotion, journal.date, journal);
-                      }}
-                    >
-                      <Ionicons name="create-outline" size={18} color="#b8956a" />
-                      <Text style={styles.editListItemButtonText}>수정</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteListItemButton}
-                      onPress={() => handleDeleteJournal(journal)}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                      <Text style={styles.deleteListItemButtonText}>삭제</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+      {/* 헤더 */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>EmoLog</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              onPress={() => setIsLogView(!isLogView)}
+              style={styles.headerButton}
+            >
+              <Ionicons
+                name={isLogView ? 'toggle' : 'toggle-outline'}
+                size={24}
+                color={isLogView ? '#8B5CF6' : '#64748b'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onNavigateToStats}
+              style={styles.headerButton}
+            >
+              <Ionicons name="stats-chart" size={24} color="#64748b" />
+            </TouchableOpacity>
+            {onNavigateToSettings && (
+              <TouchableOpacity
+                onPress={onNavigateToSettings}
+                style={styles.headerButton}
+              >
+                <Ionicons name="settings" size={24} color="#64748b" />
+              </TouchableOpacity>
             )}
           </View>
-        ) : (
-          // 달력 보기 모드
-          <>
-            <View style={styles.calendarCard}>
-              <Calendar
-                style={styles.calendar}
-                theme={{
-                  backgroundColor: '#fdfbf7',
-                  calendarBackground: '#fdfbf7',
-                  todayTextColor: '#b8956a',
-                  selectedDayBackgroundColor: '#b8956a',
-                  arrowColor: '#b8956a',
-                  textDayFontWeight: '600',
-                  textMonthFontWeight: '700',
-                  textDayHeaderFontWeight: '700',
-                  textDayFontFamily: 'NanumPen',
-                  textMonthFontFamily: 'NanumPen',
-                  textDayHeaderFontFamily: 'NanumPen',
-                  textDayFontSize: 18,
-                  textMonthFontSize: 22,
-                  textDayHeaderFontSize: 16,
-                }}
-                onDayPress={handleDayPress}
-                markedDates={markedDates}
-                dayComponent={CustomDay}
-              />
-            </View>
+        </View>
+      </View>
 
-            <View style={styles.quoteCard}>
-              <Text style={styles.quoteText}>
-                "기록은 마음을 정리하는 첫 걸음이에요.{'\n'}오늘의 감정을 저에게 살짝 들려주세요."
-              </Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* 빈 상태 */}
+        {journals.length === 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconContainer}>
+              <Text style={styles.emptyIcon}>💭</Text>
             </View>
-          </>
+            <Text style={styles.emptyTitle}>오늘의 감정을 기록해보세요</Text>
+            <Text style={styles.emptySubtitle}>
+              쉽고 간단하게 감정을 메모하고{'\n'}
+              나만의 감정 패턴을 발견하세요
+            </Text>
+          </View>
+        )}
+
+        {/* 메모 리스트 또는 Log 뷰 */}
+        {journals.length > 0 && (
+          <View style={styles.listContainer}>
+            <Text style={styles.listHeader}>
+              {isLogView ? `총 ${journals.length}개의 Log` : `총 ${journals.length}개의 감정 메모`}
+            </Text>
+            
+            {isLogView ? (
+              // Log 뷰
+              <View style={styles.logList}>
+                {sortedJournals.map((journal) => {
+                  const { topic, emotion } = getLogData(journal);
+                  return (
+                    <View key={journal.id} style={styles.logCard}>
+                      <View style={styles.logTags}>
+                        <View style={[styles.tag, { backgroundColor: getTopicColor(topic) + '20', borderColor: getTopicColor(topic) + '40' }]}>
+                          <Text style={[styles.tagText, { color: getTopicColor(topic) }]}>{topic}</Text>
+                        </View>
+                        <View style={[styles.tag, { backgroundColor: getEmotionColor(emotion) + '20', borderColor: getEmotionColor(emotion) + '40' }]}>
+                          <Text style={[styles.tagText, { color: getEmotionColor(emotion) }]}>{emotion}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.logContent} numberOfLines={2}>
+                        {journal.content || '내용이 없습니다.'}
+                      </Text>
+                      <Text style={styles.logDate}>{formatDate(journal.date)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              // 메모 리스트
+              <View style={styles.memoList}>
+                {sortedJournals.map((journal) => (
+                  <TouchableOpacity
+                    key={journal.id}
+                    style={styles.memoCard}
+                    onPress={() => {
+                      setSelectedDate(journal.date);
+                      setSelectedJournal(journal);
+                      onNavigateToJournalWrite(journal.emotion, journal.date, journal);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.memoCardContent}>
+                      <Text style={styles.memoText} numberOfLines={4}>
+                        {journal.content || '내용이 없습니다.'}
+                      </Text>
+                      <Text style={styles.memoDate}>{formatRelativeTime(journal.date)}</Text>
+                    </View>
+                    <View style={styles.memoActions}>
+                      <TouchableOpacity
+                        style={styles.memoActionButton}
+                        onPress={() => {
+                          setSelectedDate(journal.date);
+                          setSelectedJournal(journal);
+                          onNavigateToJournalWrite(journal.emotion, journal.date, journal);
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.memoActionButton, showDeleteConfirm === journal.id && styles.deleteConfirm]}
+                        onPress={() => handleDeleteJournal(journal)}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={showDeleteConfirm === journal.id ? '#EF4444' : '#EF4444'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
-      <StatusBar style="auto" />
 
+      {/* 플로팅 추가 버튼 */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => {
+          setSelectedDate(null);
+          setSelectedJournal(null);
+          setModalVisible(true);
+        }}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={['#3B82F6', '#8B5CF6']}
+          style={styles.fabGradient}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {/* 감정 선택 모달 */}
       <Modal
         visible={modalVisible}
         transparent
@@ -343,7 +366,12 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
                     });
                   }}
                 >
-                  <Text style={styles.editButtonText}>수정하기</Text>
+                  <LinearGradient
+                    colors={['#3B82F6', '#8B5CF6']}
+                    style={styles.editButtonGradient}
+                  >
+                    <Text style={styles.editButtonText}>수정하기</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -364,6 +392,7 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
           </View>
         </View>
       </Modal>
+      <StatusBar style="auto" />
     </View>
   );
 }
@@ -371,63 +400,29 @@ export default function HomeScreen({ onNavigateToSettings, onNavigateToStats, on
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fdfbf7',
   },
   header: {
     paddingTop: 48,
     paddingBottom: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerLeft: {
-    flex: 1,
-  },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1e293b',
-    letterSpacing: -0.5,
+    color: '#3B82F6',
     fontFamily: 'NanumPen',
   },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500',
-    marginTop: 2,
-    fontFamily: 'NanumPen',
-  },
-  headerRight: {
+  headerButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
   },
-  heartIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  statsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingsButton: {
+  headerButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -437,48 +432,173 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 0,
-    paddingTop: 40,
-    paddingBottom: 96,
-    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 100,
+  },
+  emptyState: {
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 60,
   },
-  calendarCard: {
-    backgroundColor: '#fdfbf7',
-    borderRadius: 0,
-    padding: 20,
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 24,
-    width: '100%',
   },
-  calendar: {
-    borderRadius: 0,
-    backgroundColor: '#fdfbf7',
-    width: '100%',
+  emptyIcon: {
+    fontSize: 40,
   },
-  quoteCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 32,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
+    fontFamily: 'NanumPen',
   },
-  quoteText: {
+  emptySubtitle: {
     fontSize: 14,
     color: '#64748b',
-    lineHeight: 22,
-    fontStyle: 'italic',
     textAlign: 'center',
+    lineHeight: 20,
     fontFamily: 'NanumPen',
+  },
+  listContainer: {
+    marginTop: 20,
+  },
+  listHeader: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 16,
+    fontFamily: 'NanumPen',
+  },
+  memoList: {
+    gap: 12,
+  },
+  memoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  memoCardContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  memoText: {
+    fontSize: 15,
+    color: '#1e293b',
+    lineHeight: 22,
+    fontFamily: 'NanumPen',
+    marginBottom: 12,
+  },
+  memoDate: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontFamily: 'NanumPen',
+  },
+  memoActions: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'flex-start',
+    paddingTop: 4,
+  },
+  memoActionButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  deleteConfirm: {
+    backgroundColor: '#fee2e2',
+  },
+  logList: {
+    gap: 12,
+  },
+  logCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    height: 112,
+    justifyContent: 'space-between',
+  },
+  logTags: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  tag: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'NanumPen',
+  },
+  logContent: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+    fontFamily: 'NanumPen',
+    flex: 1,
+  },
+  logDate: {
+    fontSize: 12,
+    color: '#cbd5e1',
+    fontFamily: 'NanumPen',
+    marginTop: 4,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 48,
-    borderTopRightRadius: 48,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 32,
     paddingBottom: 40,
     shadowColor: '#000',
@@ -498,9 +618,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: '900',
+    fontWeight: '700',
     color: '#1e293b',
-    letterSpacing: -0.5,
     marginBottom: 4,
     fontFamily: 'NanumPen',
   },
@@ -541,6 +660,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginTop: 8,
     fontFamily: 'NanumPen',
   },
   selectedEmotionContainer: {
@@ -569,8 +689,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   editButton: {
-    backgroundColor: '#b8956a',
     borderRadius: 16,
+    overflow: 'hidden',
+  },
+  editButtonGradient: {
     padding: 16,
     alignItems: 'center',
   },
@@ -579,133 +701,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     fontFamily: 'NanumPen',
-  },
-  customDayContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  journalDayContainer: {
-    // 일기가 있는 날짜는 아이콘이 꽉 차도록
-    width: '100%',
-    height: '100%',
-  },
-  customDayText: {
-    fontSize: 18,
-    fontFamily: 'NanumPen',
-    color: '#1e293b',
-  },
-  todayContainer: {
-    borderRadius: 20,
-  },
-  todayText: {
-    color: '#b8956a',
-    fontWeight: '700',
-  },
-  disabledText: {
-    color: '#cbd5e1',
-  },
-  listContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-  },
-  emptyListContainer: {
-    paddingVertical: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyListText: {
-    fontSize: 16,
-    color: '#94a3b8',
-    textAlign: 'center',
-    fontFamily: 'NanumPen',
-    lineHeight: 24,
-  },
-  journalListItem: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  journalListItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  journalListItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  journalListItemInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  journalListItemDate: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-    fontFamily: 'NanumPen',
-    marginBottom: 4,
-  },
-  journalListItemEmotion: {
-    fontSize: 14,
-    color: '#64748b',
-    fontFamily: 'NanumPen',
-  },
-  journalListItemContent: {
-    fontSize: 15,
-    color: '#475569',
-    lineHeight: 22,
-    fontFamily: 'NanumPen',
-    marginBottom: 16,
-  },
-  journalListItemActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-  },
-  editListItemButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  editListItemButtonText: {
-    fontSize: 14,
-    color: '#b8956a',
-    fontFamily: 'NanumPen',
-    marginLeft: 6,
-    fontWeight: '600',
-  },
-  deleteListItemButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fee2e2',
-  },
-  deleteListItemButtonText: {
-    fontSize: 14,
-    color: '#ef4444',
-    fontFamily: 'NanumPen',
-    marginLeft: 6,
-    fontWeight: '600',
   },
 });

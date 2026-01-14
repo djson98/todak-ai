@@ -25,6 +25,38 @@ export interface BackendDiaryCreate {
   emotion: BackendEmotion;
 }
 
+export interface BackendDiaryUpdate {
+  content?: string;
+  emotion?: BackendEmotion;
+}
+
+export interface BackendStatsResponse {
+  emotion_stats: Array<{
+    emotion: BackendEmotion;
+    count: number;
+  }>;
+  topic_stats: Array<{
+    topic: string;
+    count: number;
+  }>;
+  total_count: number;
+}
+
+export interface BackendReportResponse {
+  title: string;
+  content: string;
+  period: string;
+}
+
+export interface BackendLogExtractRequest {
+  content: string;
+}
+
+export interface BackendLogExtractResponse {
+  topic: string;
+  emotion: BackendEmotion;
+}
+
 /**
  * 일기 생성
  */
@@ -80,6 +112,32 @@ export async function getDiary(diaryId: string | number): Promise<BackendDiaryEn
 }
 
 /**
+ * 일기 수정
+ */
+export async function updateDiary(diaryId: string | number, updates: BackendDiaryUpdate): Promise<BackendDiaryEntry> {
+  const response = await fetch(`${API_BASE_URL}/api/diary/${diaryId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('일기 수정 API 에러:', response.status, errorText);
+    if (response.status === 404) {
+      throw new Error('일기를 찾을 수 없습니다.');
+    }
+    if (response.status === 503 || errorText.includes('데이터베이스가 설정되지 않았습니다')) {
+      throw new Error('데이터베이스가 설정되지 않았습니다. Firebase 설정이 필요합니다.');
+    }
+    throw new Error(`일기 수정 실패: ${errorText}`);
+  }
+  return response.json();
+}
+
+/**
  * 일기 삭제
  */
 export async function deleteDiary(diaryId: string | number): Promise<void> {
@@ -91,4 +149,69 @@ export async function deleteDiary(diaryId: string | number): Promise<void> {
     console.error('일기 삭제 API 에러:', response.status, errorText);
     throw new Error('일기 삭제에 실패했습니다.');
   }
+}
+
+/**
+ * 통계 조회
+ */
+export async function getStats(userId: string, period: 'week' | 'month' = 'week'): Promise<BackendStatsResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/stats?user_id=${userId}&period=${period}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('통계 조회 API 에러:', response.status, errorText);
+    // Firebase 미설정 시 빈 통계 반환
+    if (response.status === 500) {
+      return {
+        emotion_stats: [],
+        topic_stats: [],
+        total_count: 0,
+      };
+    }
+    throw new Error(`통계를 가져오는데 실패했습니다: ${errorText}`);
+  }
+  return response.json();
+}
+
+/**
+ * 레포트 조회
+ */
+export async function getReport(userId: string, period: 'week' | 'month' = 'week'): Promise<BackendReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/stats/report?user_id=${userId}&period=${period}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('레포트 조회 API 에러:', response.status, errorText);
+    // Firebase 미설정 시 기본 레포트 반환
+    if (response.status === 500) {
+      const periodName = period === 'week' ? '지난 주' : '지난 달';
+      return {
+        title: `${periodName}의 감정 레포트`,
+        content: '데이터베이스가 설정되지 않았습니다.',
+        period,
+      };
+    }
+    throw new Error(`레포트를 가져오는데 실패했습니다: ${errorText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Log 추출 (주제, 감정 추출)
+ */
+export async function extractLog(content: string): Promise<BackendLogExtractResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/log/extract`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Log 추출 API 에러:', response.status, errorText);
+    throw new Error(`Log 추출 실패: ${errorText}`);
+  }
+  return response.json();
 }

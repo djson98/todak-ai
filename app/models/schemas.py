@@ -29,6 +29,11 @@ class DiaryEntryCreate(DiaryEntryBase):
     """일기 생성 요청 모델 (프론트엔드에서 받을 때)"""
     pass
 
+class DiaryEntryUpdate(BaseModel):
+    """일기 수정 요청 모델 (content, emotion만 수정 가능)"""
+    content: Optional[str] = None
+    emotion: Optional[Emotion] = None
+
 class DiaryEntry(DiaryEntryBase):
     """일기 응답 모델 (저장 후 반환할 때)"""
     id: Optional[Union[int, str]] = None  # Firestore는 문자열 ID를 사용하므로 Union 타입
@@ -90,3 +95,40 @@ class AgentResponse(BaseModel):
     send_time: str  # "YYYY-MM-DD HH:mm:ss"
     message: Optional[str] = None  # should_send가 false면 null
     reason: str  # 판단 사유 및 맥락 분석 결과
+
+# ==========================================
+# 통계 및 레포트 관련 모델
+# ==========================================
+class EmotionStats(BaseModel):
+    """감정별 통계"""
+    emotion: Emotion
+    count: int
+
+class TopicStats(BaseModel):
+    """주제별 통계"""
+    topic: str
+    count: int
+
+class StatsResponse(BaseModel):
+    """통계 응답 모델"""
+    emotion_stats: List[EmotionStats]
+    topic_stats: List[TopicStats]
+    total_count: int
+
+class ReportResponse(BaseModel):
+    """레포트 응답 모델"""
+    title: str
+    content: str
+    period: str  # "week" | "month"
+
+# ==========================================
+# Log 추출 관련 모델
+# ==========================================
+class LogExtractRequest(BaseModel):
+    """Log 추출 요청 모델"""
+    content: str
+
+class LogExtractResponse(BaseModel):
+    """Log 추출 응답 모델"""
+    topic: str  # 주제 (학업, 대인관계, 일상, 취미, 건강 등)
+    emotion: Emotion  # 감정

@@ -8,7 +8,7 @@ from datetime import datetime
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1 import Query
 from app.core.firebase import get_db
-from app.models.schemas import DiaryEntry, DiaryEntryCreate
+from app.models.schemas import DiaryEntry, DiaryEntryCreate, DiaryEntryUpdate
 from fastapi import HTTPException
 
 COLLECTION_NAME = "diaries"
@@ -71,6 +71,30 @@ class DiaryRepository:
         docs = query.stream()
         diaries = [self._doc_to_diary_entry(doc) for doc in docs]
         return diaries
+    
+    def update(self, diary_id: str, updates: DiaryEntryUpdate) -> Optional[DiaryEntry]:
+        """일기 수정"""
+        doc_ref = self.collection.document(diary_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return None
+        
+        update_dict = {}
+        if updates.content is not None:
+            update_dict["content"] = updates.content
+        if updates.emotion is not None:
+            update_dict["emotion"] = updates.emotion.value
+        
+        if not update_dict:
+            # 수정할 내용이 없으면 기존 문서 반환
+            return self._doc_to_diary_entry(doc)
+        
+        update_dict["updated_at"] = datetime.now().isoformat()
+        doc_ref.update(update_dict)
+        
+        # 업데이트된 문서 가져오기
+        updated_doc = doc_ref.get()
+        return self._doc_to_diary_entry(updated_doc)
     
     def delete(self, diary_id: str) -> bool:
         """일기 삭제"""

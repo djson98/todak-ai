@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { createJournal, getJournalByDate, updateJournal } from '../services/journalService';
 import { Emotion, JournalEntry } from '../types/journal';
@@ -90,13 +91,18 @@ export default function JournalWriteScreen({ emotion, selectedDate, existingJour
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={['#EFF6FF', '#F3E8FF', '#FCE7F3']}
+        style={StyleSheet.absoluteFill}
+      />
+      
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#94a3b8" />
+          <Ionicons name="chevron-back" size={28} color="#64748b" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.addButton}>
-          <Ionicons name="add" size={20} color="#94a3b8" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {existingJournal ? '감정 메모 수정' : '감정 메모 작성'}
+        </Text>
         <View style={styles.backButton} />
       </View>
       
@@ -105,47 +111,47 @@ export default function JournalWriteScreen({ emotion, selectedDate, existingJour
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.emojiCircle}>
-          <Ionicons name={emotion.icon as any} size={60} color={emotion.color} />
+        <View style={styles.formContainer}>
+          <TextInput
+            autoFocus
+            value={content}
+            onChangeText={setContent}
+            placeholder="지금 이 순간의 감정을 자유롭게 적어보세요...&#10;&#10;예) 오늘 시험이 끝났는데 생각보다 잘 본 것 같아서 후련하다."
+            placeholderTextColor="#cbd5e1"
+            multiline
+            style={styles.textInput}
+            textAlignVertical="top"
+          />
+          
+          <View style={styles.footer}>
+            <Text style={styles.footerHint}>
+              저장하려면 하단 버튼을 눌러주세요
+            </Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onBack}
+              >
+                <Text style={styles.cancelButtonText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSave}
+                disabled={!content.trim() || loading}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#8B5CF6']}
+                  style={styles.saveButtonGradient}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {existingJournal ? '수정' : '저장'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-
-        <TouchableOpacity style={styles.dateButton}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          <Ionicons name="chevron-forward" size={14} color="#94a3b8" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-
-        <TextInput
-          autoFocus
-          value={content}
-          onChangeText={setContent}
-          placeholder="오늘 하루를 기록해보세요"
-          placeholderTextColor="#cbd5e1"
-          multiline
-          style={styles.textInput}
-          textAlignVertical="top"
-        />
       </ScrollView>
-
-      <View style={styles.toolbar}>
-        <View style={styles.toolbarLeft}>
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Ionicons name="camera-outline" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Ionicons name="document-text-outline" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Ionicons name="time-outline" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity 
-          style={styles.saveButton}
-          onPress={handleSave}
-          disabled={loading}
-        >
-          <Ionicons name="checkmark" size={28} color="#1e293b" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -153,7 +159,6 @@ export default function JournalWriteScreen({ emotion, selectedDate, existingJour
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     paddingTop: 48,
@@ -162,86 +167,89 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -8,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1e293b',
+    fontFamily: 'NanumPen',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingTop: 32,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
-  emojiCircle: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 24,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 48,
-  },
-  dateText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#94a3b8',
+  formContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   textInput: {
-    minHeight: 300,
-    fontSize: 17,
+    minHeight: 256,
+    fontSize: 16,
     color: '#334155',
     lineHeight: 24,
-    padding: 8,
+    fontFamily: 'NanumPen',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
+    backgroundColor: '#fff',
   },
-  toolbar: {
-    height: 80,
-    paddingHorizontal: 32,
+  footer: {
+    marginTop: 24,
+  },
+  footerHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 16,
+    fontFamily: 'NanumPen',
+  },
+  buttonRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'flex-end',
+    gap: 12,
   },
-  toolbarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
   },
-  toolbarButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 24,
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    fontFamily: 'NanumPen',
   },
   saveButton: {
-    padding: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  saveButtonGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: 'NanumPen',
   },
 });
