@@ -213,4 +213,5 @@ __marimo__/
 # Firebase credentials (보안상 중요)
 firebase-credentials/*.json
 firebase-credentials/*.key
-firebase-credentials/*.json
+infra/firebase-service-account.json
+infra/*.json
