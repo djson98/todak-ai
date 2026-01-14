@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useFonts } from 'expo-font';
+import * as Notifications from 'expo-notifications';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import JournalWriteScreen from './screens/JournalWriteScreen';
 import StatsScreen from './screens/StatsScreen';
 import LoginScreen from './screens/LoginScreen';
 import { Emotion, JournalEntry } from './types/journal';
+
+// 알림 핸들러 설정
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);

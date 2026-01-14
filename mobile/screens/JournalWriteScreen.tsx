@@ -139,11 +139,14 @@ export default function JournalWriteScreen({ emotion, selectedDate, existingJour
           </TouchableOpacity>
         </View>
         <TouchableOpacity 
-          style={styles.saveButton}
+          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
+          activeOpacity={0.7}
         >
-          <Ionicons name="checkmark" size={28} color="#1e293b" />
+          <Text style={styles.saveButtonText}>
+            {loading ? '저장 중...' : '작성 완료'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -242,6 +245,18 @@ const styles = StyleSheet.create({
     marginRight: 24,
   },
   saveButton: {
-    padding: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: '#6366f1',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: 'NanumPen',
   },
 });

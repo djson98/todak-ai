@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Calendar from 'expo-calendar';
+import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 
 type SettingsScreenProps = {
@@ -78,6 +79,37 @@ export default function SettingsScreen({ onBack, onLogout }: SettingsScreenProps
     return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
 
+  const handleTestNotification = async () => {
+    try {
+      // 알림 권한 요청
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        Alert.alert('권한 필요', '알림을 받으려면 알림 권한이 필요합니다.');
+        return;
+      }
+
+      // 테스트 알림 발송
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '토닥이',
+          body: '오늘 시험은 어땠어? 피곤하지 않아?',
+          sound: true,
+        },
+        trigger: null, // 즉시 발송
+      });
+    } catch (error) {
+      console.error('알림 발송 실패:', error);
+      Alert.alert('오류', '알림 발송에 실패했습니다.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -146,6 +178,21 @@ export default function SettingsScreen({ onBack, onLogout }: SettingsScreenProps
                 styles.toggleThumb,
                 darkMode && styles.toggleThumbActive
               ]} />
+            </TouchableOpacity>
+          </View>
+
+          {/* 노티 테스트 버튼 */}
+          <View style={[styles.settingItem, { marginTop: 16 }]}>
+            <View style={styles.notiTestContainer}>
+              <Ionicons name="notifications-outline" size={20} color="#6366f1" style={{ marginRight: 12 }} />
+              <Text style={styles.settingLabel}>노티 테스트</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.notiTestButton}
+              onPress={handleTestNotification}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.notiTestButtonText}>테스트</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -322,6 +369,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ef4444',
+    fontFamily: 'NanumPen',
+  },
+  notiTestContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  notiTestButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#6366f1',
+  },
+  notiTestButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
     fontFamily: 'NanumPen',
   },
   version: {
