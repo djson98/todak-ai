@@ -65,11 +65,15 @@ class DiaryRepository:
     
     def get_by_user_id(self, user_id: str) -> List[DiaryEntry]:
         """사용자 ID로 일기 목록 조회"""
+        # 인덱스 없이도 동작하도록 필터링만 하고, 정렬은 메모리에서 수행
         query = self.collection.where(
             filter=FieldFilter("user_id", "==", user_id)
-        ).order_by("date", direction=Query.DESCENDING)
+        )
         docs = query.stream()
         diaries = [self._doc_to_diary_entry(doc) for doc in docs]
+        # 메모리에서 날짜 기준 내림차순 정렬 (최신순)
+        # date는 ISO 형식 문자열이므로 문자열 비교로 정렬 가능
+        diaries.sort(key=lambda x: x.date, reverse=True)
         return diaries
     
     def update(self, diary_id: str, updates: DiaryEntryUpdate) -> Optional[DiaryEntry]:
