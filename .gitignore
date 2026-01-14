@@ -209,3 +209,8 @@ __marimo__/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Firebase credentials (보안상 중요)
+firebase-credentials/*.json
+firebase-credentials/*.key
+firebase-credentials/*.json
